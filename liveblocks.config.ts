@@ -1,17 +1,17 @@
 import { LiveMap, createClient } from "@liveblocks/client";
-import { createRoomContext, createLiveblocksContext } from "@liveblocks/react";
-import { ReactionEvent } from "./types/type";
+import { createRoomContext } from "@liveblocks/react";
 
 const client = createClient({
+  throttle: 16,
   publicApiKey: process.env.NEXT_PUBLIC_LIVEBLOCKS_PUBLIC_KEY!,
 });
 
 // Presence represents the properties that exist on every user in the Room
 // and that will automatically be kept in sync. Accessible through the
 // `user.presence` property. Must be JSON-serializable.
-export type Presence = {
-  cursor: { x: number, y: number } | null,
-  message: string | null;
+type Presence = {
+  // cursor: { x: number, y: number } | null,
+  // ...
 };
 
 // Optionally, Storage represents the shared document that persists in the
@@ -34,17 +34,21 @@ type UserMeta = {
 
 // Optionally, the type of custom events broadcast and listened to in this
 // room. Use a union for multiple events. Must be JSON-serializable.
-type RoomEvent = ReactionEvent;
+type RoomEvent = {
+  // type: "NOTIFICATION",
+  // ...
+};
 
 // Optionally, when using Comments, ThreadMetadata represents metadata on
 // each thread. Can only contain booleans, strings, and numbers.
 export type ThreadMetadata = {
-  // resolved: boolean;
-  // quote: string;
-  // time: number;
+  resolved: boolean;
+  zIndex: number;
+  time?: number;
+  x: number;
+  y: number;
 };
 
-// Room-level hooks, use inside `RoomProvider`
 export const {
   suspense: {
     RoomProvider,
@@ -54,7 +58,6 @@ export const {
     useSelf,
     useOthers,
     useOthersMapped,
-    useOthersListener,
     useOthersConnectionIds,
     useOther,
     useBroadcastEvent,
@@ -74,6 +77,7 @@ export const {
     useStatus,
     useLostConnectionListener,
     useThreads,
+    useUser,
     useCreateThread,
     useEditThreadMetadata,
     useCreateComment,
@@ -81,28 +85,42 @@ export const {
     useDeleteComment,
     useAddReaction,
     useRemoveReaction,
-    useThreadSubscription,
-    useMarkThreadAsRead,
-    useRoomNotificationSettings,
-    useUpdateRoomNotificationSettings,
+  },
+} = createRoomContext<Presence, Storage, UserMeta, RoomEvent, ThreadMetadata>(client, {
+  async resolveUsers({ userIds }) {
+    // Used only for Comments. Return a list of user information retrieved
+    // from `userIds`. This info is used in comments, mentions etc.
 
-    // These hooks can be exported from either context
-    // useUser,
-    // useRoomInfo
-  }
-} = createRoomContext<Presence, Storage, UserMeta, RoomEvent, ThreadMetadata>(client);
+    // const usersData = await __fetchUsersFromDB__(userIds);
+    //
+    // return usersData.map((userData) => ({
+    //   name: userData.name,
+    //   avatar: userData.avatar.src,
+    // }));
 
-// Project-level hooks, use inside `LiveblocksProvider`
-export const {
-  suspense: {
-    LiveblocksProvider,
-    useMarkInboxNotificationAsRead,
-    useMarkAllInboxNotificationsAsRead,
-    useInboxNotifications,
-    useUnreadInboxNotificationsCount,
+    return [];
+  },
+  async resolveMentionSuggestions({ text, roomId }) {
+    // Used only for Comments. Return a list of userIds that match `text`.
+    // These userIds are used to create a mention list when typing in the
+    // composer.
+    //
+    // For example when you type "@jo", `text` will be `"jo"`, and
+    // you should to return an array with John and Joanna's userIds:
+    // ["john@example.com", "joanna@example.com"]
 
-    // These hooks can be exported from either context
-    useUser,
-    useRoomInfo,
-  }
-} = createLiveblocksContext<UserMeta, ThreadMetadata>(client);
+    // const userIds = await __fetchAllUserIdsFromDB__(roomId);
+    //
+    // Return all userIds if no `text`
+    // if (!text) {
+    //   return userIds;
+    // }
+    //
+    // Otherwise, filter userIds for the search `text` and return
+    // return userIds.filter((userId) =>
+    //   userId.toLowerCase().includes(text.toLowerCase())
+    // );
+
+    return [];
+  },
+});

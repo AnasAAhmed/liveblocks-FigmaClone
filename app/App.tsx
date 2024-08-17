@@ -1,167 +1,214 @@
-"use client"
-import { fabric } from 'fabric';
-import Live from "@/components/Live";
-import Navbar from "@/components/Navbar";
-import LeftSidebar from "@/components/LeftSidebar";
-import RightSidebar from "@/components/RightSidebar";
-import { useEffect, useRef, useState } from "react";
-import { handleCanvasMouseDown, handleCanvasMouseUp, handleCanvasObjectModified, handleCanvasObjectScaling, handleCanvasSelectionCreated, handleCanvaseMouseMove, handlePathCreated, handleResize, initializeFabric, renderCanvas } from '@/lib/canvas';
-import { ActiveElement, Attributes } from '@/types/type';
-import { useMutation, useRedo, useStorage, useUndo } from '@/liveblocks.config';
-import { defaultNavElement } from '@/constants';
-import { handleDelete, handleKeyDown } from '@/lib/key-events';
-import { handleImageUpload } from '@/lib/shapes';
+"use client";
 
-export default function Page() {
-  const redo = useUndo();
-  const undo = useRedo();
+import { fabric } from "fabric";
+import { useEffect, useRef, useState } from "react";
+
+import { useMutation, useRedo, useStorage, useUndo } from "@/liveblocks.config";
+import {
+  handleCanvaseMouseMove,
+  handleCanvasMouseDown,
+  handleCanvasMouseUp,
+  handleCanvasObjectModified,
+  handleCanvasObjectMoving,
+  handleCanvasObjectScaling,
+  handleCanvasSelectionCreated,
+  handleCanvasZoom,
+  handlePathCreated,
+  handleResize,
+  initializeFabric,
+  renderCanvas,
+} from "@/lib/canvas";
+import { handleDelete, handleKeyDown } from "@/lib/key-events";
+import { LeftSidebar, Live, Navbar, RightSidebar } from "@/components/index";
+import { handleImageUpload } from "@/lib/shapes";
+import { defaultNavElement } from "@/constants";
+import { ActiveElement, Attributes } from "@/types/type";
+
+const Home = () => {
+  const undo = useUndo();
+  const redo = useRedo();
+
+  const canvasObjects = useStorage((root) => root.canvasObjects);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const fabricRef = useRef<fabric.Canvas | null>(null);
+  const fabricRef = useRef<fabric.Canvas | null>(null)
+  const isDrawing = useRef(false);
   const shapeRef = useRef<fabric.Object | null>(null);
   const selectedShapeRef = useRef<string | null>(null);
-  const imageInputRef = useRef<HTMLInputElement>(null);
   const activeObjectRef = useRef<fabric.Object | null>(null);
-  const isEditingRef = useRef<boolean>(false);
-  const isDrawing = useRef<boolean>(false);
+  const isEditingRef = useRef(false);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
-  const canvasObjects = useStorage((root) => root.canvasObjects)
+  const [activeElement, setActiveElement] = useState<ActiveElement>({
+    name: "",
+    value: "",
+    icon: "",
+  });
 
   const [elementAttributes, setElementAttributes] = useState<Attributes>({
     width: "",
-    height: '',
-    fontSize: '',
-    fontWeight: '',
-    fontFamily: '',
-    fill: '#aabbcc',
-    stroke: '#aabbcc'
-})
+    height: "",
+    fontSize: "",
+    fontFamily: "",
+    fontWeight: "",
+    fill: "#aabbcc",
+    stroke: "#aabbcc",
+  });
+
+  const deleteShapeFromStorage = useMutation(({ storage }, shapeId) => {
+    const canvasObjects = storage.get("canvasObjects");
+    canvasObjects.delete(shapeId);
+  }, []);
+
+  const deleteAllShapes = useMutation(({ storage }) => {
+    // get the canvasObjects store
+    const canvasObjects = storage.get("canvasObjects");
+
+    // if the store doesn't exist or is empty, return
+    if (!canvasObjects || canvasObjects.size === 0) return true;
+
+    // delete all the shapes from the store
+    for (const [key, value] of canvasObjects.entries()) {
+      canvasObjects.delete(key);
+    }
+
+    // return true if the store is empty
+    return canvasObjects.size === 0;
+  }, []);
 
   const syncShapeInStorage = useMutation(({ storage }, object) => {
     if (!object) return;
     const { objectId } = object;
+
     const shapeData = object.toJSON();
     shapeData.objectId = objectId;
 
-    const canvasObjects = storage.get('canvasObjects');
+    const canvasObjects = storage.get("canvasObjects");
+
     canvasObjects.set(objectId, shapeData);
   }, []);
 
-  const [activeElement, setActiveElement] = useState<ActiveElement>({
-    name: '',
-    value: '',
-    icon: '',
-  });
-
-  const deletAllShapes = useMutation(({ storage }) => {
-    const canvasObjects = storage.get("canvasObjects");
-    if (!canvasObjects || canvasObjects.size === 0) return true;
-
-    for (const [key, value] of canvasObjects.entries()) {
-      canvasObjects.delete(key);
-    }
-    return canvasObjects.size === 0;
-  }, []);
-
-  const deleteShapeFromStorage = useMutation(({ storage }, objectId) => {
-    const canvasObjects = storage.get('canvasObjects');
-
-    canvasObjects.delete(objectId);
-
-  }, [])
-
-
   const handleActiveElement = (elem: ActiveElement) => {
     setActiveElement(elem);
+
     switch (elem?.value) {
       case "reset":
-        deletAllShapes();
+        deleteAllShapes();
         fabricRef.current?.clear();
         setActiveElement(defaultNavElement);
         break;
+
       case "delete":
-        handleDelete(
-          fabricRef.current as any,
-          deleteShapeFromStorage)
+        handleDelete(fabricRef.current as any, deleteShapeFromStorage);
         setActiveElement(defaultNavElement);
         break;
+
       case "image":
         imageInputRef.current?.click();
         isDrawing.current = false;
+
         if (fabricRef.current) {
-          fabricRef.current.isDrawingMode = false
+          fabricRef.current.isDrawingMode = false;
         }
         break;
+
+      case "comments":
+        break;
+
       default:
+        selectedShapeRef.current = elem?.value as string;
         break;
     }
-
-    selectedShapeRef.current = elem?.value as string;
-  }
+  };
 
   useEffect(() => {
-
+    // initialize the fabric canvas
     const canvas = initializeFabric({
-      canvasRef, fabricRef
-    })
-    canvas.on("mouse:down", (options: any) => {
+      canvasRef,
+      fabricRef,
+    });
+
+    canvas.on("mouse:down", (options) => {
       handleCanvasMouseDown({
         options,
-        isDrawing,
         canvas,
         selectedShapeRef,
-        shapeRef
+        isDrawing,
+        shapeRef,
       });
-    })
-    canvas.on("mouse:move", (options: any) => {
+    });
+
+    canvas.on("mouse:move", (options) => {
       handleCanvaseMouseMove({
         options,
-        isDrawing,
         canvas,
-        selectedShapeRef,
-        shapeRef,
-        syncShapeInStorage
-      });
-    })
-    canvas.on("mouse:up", (options: any) => {
-      handleCanvasMouseUp({
         isDrawing,
-        canvas,
         selectedShapeRef,
         shapeRef,
         syncShapeInStorage,
-        setActiveElement,
-        activeObjectRef
       });
-    })
-    canvas.on("object-modified", (options: any) => {
+    });
+
+    canvas.on("mouse:up", () => {
+      handleCanvasMouseUp({
+        canvas,
+        isDrawing,
+        shapeRef,
+        activeObjectRef,
+        selectedShapeRef,
+        syncShapeInStorage,
+        setActiveElement,
+      });
+    });
+
+    canvas.on("path:created", (options) => {
+      handlePathCreated({
+        options,
+        syncShapeInStorage,
+      });
+    });
+
+    canvas.on("object:modified", (options) => {
       handleCanvasObjectModified({
         options,
         syncShapeInStorage,
       });
-    })
-    canvas.on("selection:created", (options: any) => {
+    });
+
+    canvas?.on("object:moving", (options) => {
+      handleCanvasObjectMoving({
+        options,
+      });
+    });
+
+    canvas.on("selection:created", (options) => {
       handleCanvasSelectionCreated({
         options,
         isEditingRef,
         setElementAttributes,
       });
-    })
-    canvas.on("object:scaling", (options: any) => {
+    });
+
+    canvas.on("object:scaling", (options) => {
       handleCanvasObjectScaling({
         options,
         setElementAttributes,
       });
-    })
-    canvas.on("path:created", (options: any) => {
-      handlePathCreated({
+    });
+
+    canvas.on("mouse:wheel", (options) => {
+      handleCanvasZoom({
         options,
-       syncShapeInStorage
+        canvas,
       });
-    })
+    });
+
     window.addEventListener("resize", () => {
-      handleResize({ fabricRef })
-    })
-    window.addEventListener("keydown", (e: any) => {
+      handleResize({
+        canvas: fabricRef.current,
+      });
+    });
+
+    window.addEventListener("keydown", (e) =>
       handleKeyDown({
         e,
         canvas: fabricRef.current,
@@ -170,46 +217,73 @@ export default function Page() {
         syncShapeInStorage,
         deleteShapeFromStorage,
       })
-    })
+    );
+
     return () => {
+
       canvas.dispose();
-    }
-  }, [])
+
+      // remove the event listeners
+      window.removeEventListener("resize", () => {
+        handleResize({
+          canvas: null,
+        });
+      });
+
+      window.removeEventListener("keydown", (e) =>
+        handleKeyDown({
+          e,
+          canvas: fabricRef.current,
+          undo,
+          redo,
+          syncShapeInStorage,
+          deleteShapeFromStorage,
+        })
+      );
+    };
+  }, [canvasRef]); 
+
+  // render the canvas when the canvasObjects from live storage changes
   useEffect(() => {
     renderCanvas({
       fabricRef,
+      canvasObjects,
       activeObjectRef,
-      canvasObjects
-    })
-  }, [canvasObjects])
+    });
+  }, [canvasObjects]);
+
   return (
-    <div className="h-screen overflow-hidden">
+    <main className='h-screen overflow-hidden'>
       <Navbar
-        handleImageUpload={(e) => {
-          e.stopPropagation();
-          handleImageUpload({
-            file: e.target.files![0],
-            canvas: fabricRef as any,
-            syncShapeInStorage,
-            shapeRef
-          })
-        }}
         imageInputRef={imageInputRef}
         activeElement={activeElement}
-        handleActiveElement={handleActiveElement} />
-      <section className="flex h-full flex-row">
+        handleImageUpload={(e: any) => {
+          e.stopPropagation();
+          handleImageUpload({
+            file: e.target.files[0],
+            canvas: fabricRef as any,
+            shapeRef,
+            syncShapeInStorage,
+          });
+        }}
+        handleActiveElement={handleActiveElement}
+      />
+      <section className='flex h-full flex-row'>
         <LeftSidebar allShapes={Array.from(canvasObjects)} />
-        <Live undo={undo} redo={redo} canvasRef={canvasRef} />
-        <RightSidebar
-        isEditingRef={isEditingRef}
-        elementAttributes={elementAttributes}
-        setElementAttributes={setElementAttributes}
-        fabricRef={fabricRef}
-        activeObjectRef={activeObjectRef}
-        syncShapeInStorage={syncShapeInStorage}
-        />
 
+        <Live canvasRef={canvasRef} undo={undo} redo={redo} />
+
+        <RightSidebar
+          elementAttributes={elementAttributes}
+          setElementAttributes={setElementAttributes}
+          fabricRef={fabricRef}
+          isEditingRef={isEditingRef}
+          activeObjectRef={activeObjectRef}
+          syncShapeInStorage={syncShapeInStorage}
+        />
       </section>
-    </div>
+    </main>
   );
-}
+};
+
+export default Home;

@@ -4,8 +4,8 @@ import { useMemo } from "react";
 
 import { generateRandomName } from "@/lib/utils";
 import { useOthers, useSelf } from "@/liveblocks.config";
-import { Avatar } from "./Avatar";
 
+import Avatar from "./Avatar";
 
 const ActiveUsers = () => {
   /**

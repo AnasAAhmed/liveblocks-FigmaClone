@@ -9,9 +9,6 @@
     work sans,
     sans-serif;
 }
-body{
-  overflow: hidden;
-}
 
 @layer utilities {
   .no-ring {
@@ -29,23 +26,4 @@ body{
   .right-menu-item {
     @apply flex justify-between px-3 py-2 hover:bg-primary-grey-200 !important;
   }
-}
-
-.tooltip:before {
-  content: attr(data-tooltip);
-  position: absolute;
-  top: 100%;
-  opacity: 0;
-  transition: opacity 0.15s ease;
-  padding: 5px 10px;
-  color: white;
-  font-size: 0.75rem;
-  border-radius: 8px;
-  margin-bottom: 10px;
-  z-index: 1;
-  background: black;
-  white-space: nowrap;
-}
-.tooltip:hover::before {
-  opacity: 1;
 }
